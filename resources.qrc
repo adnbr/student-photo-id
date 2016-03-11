@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/ico">
+        <file alias="running">res/running.png</file>
+    </qresource>
+</RCC>
