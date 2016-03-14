@@ -1,23 +1,10 @@
 ﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-#ifdef Q_OS_WIN
-
-#include "opencv2\opencv.hpp"
-#include "opencv2\imgproc\imgproc.hpp"
-#include "opencv2\highgui\highgui.hpp"
-#include "tesseract\api\baseapi.h"
-
-#endif
-
-#ifdef Q_OS_LINUX
-
 #include "opencv2/opencv.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <opencv2/highgui/highgui.hpp>
 #include <tesseract/baseapi.h>
-
-#endif
 
 #include <QFileDialog>
 #include <QMessageBox>
@@ -67,14 +54,8 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-QImage mat_to_qimage_ref(cv::Mat &mat, QImage::Format format)
-{
-  return QImage(mat.data, mat.cols, mat.rows, mat.step, format);
-}
-
 double skew (Mat& src, int threshold, int percentage)
 {
-
     Size image_size = src.size();
     std::vector<Vec4i> lines;
     HoughLinesP(src, lines, 1, CV_PI/180,threshold, image_size.width / 6, image_size.width / 100 * percentage);
@@ -133,8 +114,9 @@ StudentDetails doOCR (Mat& src)
     return student;
 }
 
-StudentDetails processImage (QString file, int houghThreshold, int houghPercentage) {
-    using namespace cv;
+StudentDetails processImage (QString file, int houghThreshold, int houghPercentage)
+{
+
     Mat inputImage = cv::imread(file.toStdString());
     StudentDetails capturedStudent;
 
@@ -230,18 +212,40 @@ void MainWindow::on_pushButton_clicked()
             it.next();
             qDebug() << "Processing:\t" << it.fileInfo().absoluteFilePath();
             student = processImage(it.fileInfo().absoluteFilePath(),ui->spinHoughThreshold->value(), ui->spinHoughGapPercentage->value());
-            if (!student.dubious && ui->checkOcrSegregate->checkState() == true) {
-                QFile::copy(it.fileInfo().absoluteFilePath(), QString (ui->lineOutputURI->text() + "/" + student.surname.toUpper() + ", " + student.forename.toUpper() + ".JPG"));
-            } else {
-                QFile::copy(it.fileInfo().absoluteFilePath(), QString (ui->lineOutputURI->text() + "/uncertain/" + it.fileName()));
+            QString output;
 
+            if (student.dubious && ui->checkOcrSegregate->checkState() == Qt::Checked) {
+                 output = QString (ui->lineOutputURI->text() + "/uncertain/" + it.fileName());
+                qDebug() << "Failure: " << output;
+                QFile::copy(it.fileInfo().absoluteFilePath(), output);
+            } else {
+                switch (ui->comboNamingFormat->currentIndex()) {
+                    case 0: // SURNAME, FORENAME (GROUP X)
+                        output = QString (ui->lineOutputURI->text() + "/" + student.surname.toUpper() + ", " + student.forename.toUpper() + " (GROUP " + student.group.toUpper() + ").JPG");
+                        break;
+                    case 1: // SURNAME, FORENAME
+                        output = QString (ui->lineOutputURI->text() + "/" + student.surname.toUpper() + ", " + student.forename.toUpper() + ".JPG");
+                        break;
+                    case 2: // GROUP X/SURNAME, FORENAME
+                        // Check if the output group directory exists,
+                        // and create it if it doesn't.
+                        QDir dir(ui->lineOutputURI->text() + "/GROUP " + student.group.toUpper());
+                        if (!dir.exists()) {
+                            dir.mkpath(".");
+                        }
+                        output = QString (ui->lineOutputURI->text() + "/GROUP " + student.group.toUpper() + "/" + student.surname.toUpper() + ", " + student.forename.toUpper() + ".JPG");
+                        break;
+                }
+
+                qDebug() << "Success: " << output;
+                QFile::copy(it.fileInfo().absoluteFilePath(), output);
             }
 
         }
-  /*  } else {
+     /*} else {
         QMessageBox msgBox;
         msgBox.setWindowTitle("No Input Folder Selected");
-        msgBox.setText("No input folder has been selected, or the selection is invalid.\n\nPlease select a folder that contains JPEG images.");
+        msgBox.setText("No input folder has been selected, or the selection is invalid.\n\nPlease choose a folder that contains JPEG images.");
         msgBox.setIcon(QMessageBox::Information);image
         msgBox.exec();
         return;

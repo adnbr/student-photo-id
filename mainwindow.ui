@@ -110,12 +110,12 @@
        <bool>true</bool>
       </property>
      </widget>
-     <widget class="QComboBox" name="comboBox">
+     <widget class="QComboBox" name="comboNamingFormat">
       <property name="geometry">
        <rect>
-        <x>160</x>
+        <x>140</x>
         <y>150</y>
-        <width>271</width>
+        <width>291</width>
         <height>27</height>
        </rect>
       </property>
@@ -124,12 +124,17 @@
       </property>
       <item>
        <property name="text">
-        <string>SURNAME, FORENAME (GROUP X)</string>
+        <string>{SURNAME}, {FORENAME} (GROUP {X})</string>
        </property>
       </item>
       <item>
        <property name="text">
-        <string>SURNAME, FORENAME</string>
+        <string>{SURNAME}, {FORENAME}</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>GROUP {X}/{SURNAME}, {FORENAME}</string>
        </property>
       </item>
      </widget>
@@ -149,9 +154,9 @@
      <widget class="QLineEdit" name="lineOutputURI">
       <property name="geometry">
        <rect>
-        <x>160</x>
+        <x>140</x>
         <y>40</y>
-        <width>231</width>
+        <width>251</width>
         <height>27</height>
        </rect>
       </property>
