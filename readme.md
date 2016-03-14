@@ -2,6 +2,8 @@
 
 Uses OpenCV 2 and Tesseract OCR to sort through a folder of photographs and automatically rename them using a name plate in the image. Print each person's nameplate onto red paper using OCR-B font.
 
+_Please note: This code is for internal use only, and cuurently isn't particularly robust or precise._
+
 Compiles on Ubuntu Linux, with Windows coming soon. 
 
 ## OpenCV Processing Flow
@@ -36,8 +38,6 @@ This was tested with a fresh install of 64 bit Ubuntu 14.04 "Trusty Tahr".
 ![Main Page](images/utility-main-page.png)
 
 ![Advanced Settings Page](images/utility-advanced-page.png)
-
-
 
 ## Icon
 
