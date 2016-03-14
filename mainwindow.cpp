@@ -18,8 +18,6 @@
 
 #include <iostream>
 
-
-
 // Array locations when RGB is split.
 #define RED    2
 #define GREEN  1
@@ -86,6 +84,7 @@ void rotate(Mat& img, float angle)
 
 StudentDetails doOCR (Mat& src)
 {
+    // Setup the Tesseract
     tesseract::TessBaseAPI t;
     t.Init(NULL, "eng");
     t.SetVariable("tessedit_char_whitelist", OCR_WHITELIST);
@@ -93,21 +92,37 @@ StudentDetails doOCR (Mat& src)
     t.SetVariable("load_freq_dawg", "0");
     t.SetVariable("textord_min_linesize", "2.5");
     t.SetPageSegMode(tesseract::PSM_SINGLE_BLOCK);
+
+    // Load the image into Tesseract
     t.SetImage((uchar*)src.data, src.cols, src.rows, 1, src.cols);
+
+    // Do the image processing, get the OCR'd text out of it
     char * ocr = t.GetUTF8Text();
     QString capturedText = QString::fromUtf8((ocr));
+
+    // Split the captured text by the New Line character
     QRegExp rx("(\\n)");
     QStringList details = capturedText.split(rx);
+
+    // Load all the text into the appropriate variables.
     StudentDetails student;
     if (details.count() > 2) {
+        // Regex select the group name/letter.
+        // TODO: This is just one letter. Expand to include numbers? Or document this somewhere.
         rx.setPattern(".*GROUP *([A-Z])");
         rx.indexIn(details[2]);
+
+        // Copy details across.
         student.forename = details[1].trimmed();
         student.surname = details[0].trimmed();
         student.group = rx.cap(1);
-            if (details[0] == "" || details[1] == "" || rx.cap(1) == "") {
-                student.dubious = true;
-            }
+
+        // If we can't find anything in one or more of the OCRd fields
+        // then error out and mark the image as dubious.
+        if (details[0] == "" || details[1] == "" || rx.cap(1) == "") {
+            student.dubious = true;
+        }
+
     } else {
         student.dubious = true;
     }
@@ -180,8 +195,6 @@ StudentDetails processImage (QString file, int houghThreshold, int houghPercenta
 
         // Crop the image to the largest contour found above.
         Mat cropped = channel[4](boundingBox);
-        Mat rotatedCropped = cropped;
-        // Rotate the image by small amounts and average the hough transform result.
 
         // Detect the skew
         float angle = skew(cropped, houghThreshold, houghPercentage);
@@ -192,65 +205,76 @@ StudentDetails processImage (QString file, int houghThreshold, int houghPercenta
         rotate (cropped, angle);
         capturedStudent = doOCR(cropped);
         qDebug() << capturedStudent.forename << capturedStudent.surname << capturedStudent.group;
-        if (capturedStudent.dubious == true) {
-            qDebug() << "??";
-        }
         return capturedStudent;
 
 }
 
 void MainWindow::on_pushButton_clicked()
 {
-        StudentDetails student;
-        QDirIterator it(ui->lineImageURI->text(), QStringList() << "*.jpg", QDir::Files);
+    StudentDetails student;
 
-       QDir dir(ui->lineOutputURI->text() + "/uncertain/");
-       if (!dir.exists()) {
-           dir.mkpath(".");
-       }
-        while (it.hasNext()) {
-            it.next();
-            qDebug() << "Processing:\t" << it.fileInfo().absoluteFilePath();
-            student = processImage(it.fileInfo().absoluteFilePath(),ui->spinHoughThreshold->value(), ui->spinHoughGapPercentage->value());
-            QString output;
+    // Load a list of the files in the "input" folder into a list to iterate over.
+    QDirIterator it(ui->lineImageURI->text(), QStringList() << "*.jpg", QDir::Files);
 
-            if (student.dubious && ui->checkOcrSegregate->checkState() == Qt::Checked) {
-                 output = QString (ui->lineOutputURI->text() + "/uncertain/" + it.fileName());
-                qDebug() << "Failure: " << output;
-                QFile::copy(it.fileInfo().absoluteFilePath(), output);
-            } else {
-                switch (ui->comboNamingFormat->currentIndex()) {
-                    case 0: // SURNAME, FORENAME (GROUP X)
-                        output = QString (ui->lineOutputURI->text() + "/" + student.surname.toUpper() + ", " + student.forename.toUpper() + " (GROUP " + student.group.toUpper() + ").JPG");
-                        break;
-                    case 1: // SURNAME, FORENAME
-                        output = QString (ui->lineOutputURI->text() + "/" + student.surname.toUpper() + ", " + student.forename.toUpper() + ".JPG");
-                        break;
-                    case 2: // GROUP X/SURNAME, FORENAME
-                        // Check if the output group directory exists,
-                        // and create it if it doesn't.
-                        QDir dir(ui->lineOutputURI->text() + "/GROUP " + student.group.toUpper());
-                        if (!dir.exists()) {
-                            dir.mkpath(".");
-                        }
-                        output = QString (ui->lineOutputURI->text() + "/GROUP " + student.group.toUpper() + "/" + student.surname.toUpper() + ", " + student.forename.toUpper() + ".JPG");
-                        break;
-                }
+    // If the segregate the uncertain images box is checked then check if the "uncertain" output
+    // folder exists. Create it if it doesn't.
+    if (ui->checkOcrSegregate->checkState() == Qt::Checked) {
+        QDir dir(ui->lineOutputURI->text() + "/uncertain/");
+        if (!dir.exists()) {
+            dir.mkpath(".");
+        }
+    }
 
-                qDebug() << "Success: " << output;
-                QFile::copy(it.fileInfo().absoluteFilePath(), output);
+    // Iterate over the list of input files.
+    while (it.hasNext()) {
+
+        it.next();
+        qDebug() << "Processing:\t" << it.fileInfo().absoluteFilePath();
+
+        // Do the image processing, load the returned data into the student variable
+        student = processImage(it.fileInfo().absoluteFilePath(),ui->spinHoughThreshold->value(), ui->spinHoughGapPercentage->value());
+
+        QString outputFile;
+
+        // If the dubious variable is flagged and we are segregating them and not just ignoring them
+        if (student.dubious && ui->checkOcrSegregate->checkState() == Qt::Checked) {
+
+            outputFile = QString (ui->lineOutputURI->text() + "/uncertain/" + it.fileName());
+            qDebug() << "OCR Failure: " << outputFile;
+            QFile::copy(it.fileInfo().absoluteFilePath(), outputFile);
+
+        } else {
+
+            // The file could be read, and the OCR returned some data.
+            // What is the selected naming format? Construct the output filename.
+            switch (ui->comboNamingFormat->currentIndex()) {
+
+                case 0: // SURNAME, FORENAME (GROUP X)
+                    outputFile = QString (ui->lineOutputURI->text() + "/" + student.surname.toUpper() + ", " + student.forename.toUpper() + " (GROUP " + student.group.toUpper() + ").JPG");
+                    break;
+
+                case 1: // SURNAME, FORENAME
+                    outputFile = QString (ui->lineOutputURI->text() + "/" + student.surname.toUpper() + ", " + student.forename.toUpper() + ".JPG");
+                    break;
+
+                case 2: // GROUP X/SURNAME, FORENAME
+                    // Check if the output group directory exists,
+                    // and create it if it doesn't.
+                    QDir dir(ui->lineOutputURI->text() + "/GROUP " + student.group.toUpper());
+                    if (!dir.exists()) {
+                        dir.mkpath(".");
+                    }
+                    outputFile = QString (ui->lineOutputURI->text() + "/GROUP " + student.group.toUpper() + "/" + student.surname.toUpper() + ", " + student.forename.toUpper() + ".JPG");
+                    break;
+
             }
 
+            // Actually copy the file across here.
+            qDebug() << "OCR Success: " << outputFile;
+            QFile::copy(it.fileInfo().absoluteFilePath(), outputFile);
         }
-     /*} else {
-        QMessageBox msgBox;
-        msgBox.setWindowTitle("No Input Folder Selected");
-        msgBox.setText("No input folder has been selected, or the selection is invalid.\n\nPlease choose a folder that contains JPEG images.");
-        msgBox.setIcon(QMessageBox::Information);image
-        msgBox.exec();
-        return;
-    }*/
 
+    }
 }
 
 void MainWindow::on_pushImageSelector_clicked()
